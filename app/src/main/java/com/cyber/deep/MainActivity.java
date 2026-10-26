@@ -45,9 +45,13 @@ public class MainActivity extends AppCompatActivity {
             etInput.setText("");
             addMsg("User", prompt);
             isRunning = true;
-            tvStatus.setText("生成中...");
+            tvStatus.setText("准备中...");
 
             Core.sendMessage(TOKEN, prompt, new StreamListener() {
+                @Override
+                public void onStatus(String status) {
+                    runOnUiThread(() -> tvStatus.setText(status));
+                }
                 @Override
                 public void onChunk(String text) {
                     runOnUiThread(() -> appendAiMsg(text));

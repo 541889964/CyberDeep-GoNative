@@ -31,6 +31,7 @@ func init() {
 }
 
 type StreamListener interface {
+	OnStatus(status string)
 	OnChunk(text string)
 	OnFinish()
 	OnError(errMsg string)
@@ -38,6 +39,7 @@ type StreamListener interface {
 
 func SendMessage(token string, prompt string, listener StreamListener) {
 	go func() {
+		listener.OnStatus("获取Challenge...")
 		reqCh, _ := http.NewRequest("POST", "https://chat.deepseek.com/api/v0/chat/create_pow_challenge", strings.NewReader(`{"target_path":"/api/v0/chat/completion"}`))
 		reqCh.Header.Set("Authorization", "Bearer "+token)
 		reqCh.Header.Set("Content-Type", "application/json")
@@ -69,6 +71,7 @@ func SendMessage(token string, prompt string, listener StreamListener) {
 		signature := challengeObj["signature"].(string)
 		expireAt := int64(challengeObj["expire_at"].(float64))
 		
+		listener.OnStatus("计算 PoW...")
 		base := fmt.Sprintf("%s_%d_", salt, expireAt)
 		answer := -1
 		for i := 0; i < difficulty; i++ {
@@ -92,7 +95,6 @@ func SendMessage(token string, prompt string, listener StreamListener) {
 		powJson, _ := json.Marshal(powPayload)
 		powB64 := base64.StdEncoding.EncodeToString(powJson)
 
-		// 生成 UUID (32位，无横杠)
 		uuidBytes := make([]byte, 16)
 		rand.Read(uuidBytes)
 		chatSessionId := fmt.Sprintf("%x", uuidBytes)
@@ -104,6 +106,7 @@ func SendMessage(token string, prompt string, listener StreamListener) {
 		}
 		bodyBytes, _ := json.Marshal(bodyMap)
 		
+		listener.OnStatus("等待 AI 回复...")
 		req, _ := http.NewRequest("POST", "https://chat.deepseek.com/api/v0/chat/completion", strings.NewReader(string(bodyBytes)))
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Content-Type", "application/json")
@@ -123,9 +126,12 @@ func SendMessage(token string, prompt string, listener StreamListener) {
 			return
 		}
 
+		listener.OnStatus("接收中...")
 		scanner := bufio.NewScanner(resp.Body)
+		hasData := false
 		for scanner.Scan() {
 			line := scanner.Text()
+			hasData = true
 			if strings.HasPrefix(line, "data: ") {
 				dataStr := line[6:]
 				if dataStr == "[DONE]" { continue }
@@ -143,9 +149,12 @@ func SendMessage(token string, prompt string, listener StreamListener) {
 						listener.OnChunk("[原始JSON: " + dataStr + "]")
 					}
 				}
-			} else if line != "" {
+			} else if strings.TrimSpace(line) != "" {
 				listener.OnChunk("[原始文本: " + line + "]")
 			}
+		}
+		if !hasData {
+			listener.OnChunk("[监控: 收到 HTTP 200 但返回流为空]")
 		}
 		listener.OnFinish()
 	}()
