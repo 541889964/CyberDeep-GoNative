@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"bufio"
@@ -134,5 +134,3 @@ func SendMessage(token string, prompt string, listener StreamListener) {
 		listener.OnFinish()
 	}()
 }
-
-func main() {}
