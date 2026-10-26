@@ -37,6 +37,16 @@ type StreamListener interface {
 	OnError(errMsg string)
 }
 
+// 严格定义 JSON 结构体，保证序列化时的字段顺序与官方一致
+type PowPayload struct {
+	Algorithm  string `json:"algorithm"`
+	Challenge  string `json:"challenge"`
+	Salt       string `json:"salt"`
+	Signature  string `json:"signature"`
+	Answer     int    `json:"answer"`
+	TargetPath string `json:"target_path"`
+}
+
 func SendMessage(token string, prompt string, listener StreamListener) {
 	go func() {
 		listener.OnStatus("获取Challenge...")
@@ -70,8 +80,9 @@ func SendMessage(token string, prompt string, listener StreamListener) {
 		difficulty := int(challengeObj["difficulty"].(float64))
 		signature := challengeObj["signature"].(string)
 		expireAt := int64(challengeObj["expire_at"].(float64))
+		algorithm := challengeObj["algorithm"].(string)
 		
-		listener.OnStatus("计算 PoW...")
+		listener.OnStatus(fmt.Sprintf("计算PoW (目标:%s)...", challenge[:4]))
 		base := fmt.Sprintf("%s_%d_", salt, expireAt)
 		answer := -1
 		for i := 0; i < difficulty; i++ {
@@ -84,13 +95,15 @@ func SendMessage(token string, prompt string, listener StreamListener) {
 			}
 		}
 
-		powPayload := map[string]interface{}{
-			"algorithm": challengeObj["algorithm"],
-			"challenge": challenge,
-			"salt":      salt,
-			"signature": signature,
-			"answer":    answer,
-			"target_path": "/api/v0/chat/completion",
+		listener.OnStatus(fmt.Sprintf("解出 PoW: %d", answer))
+
+		powPayload := PowPayload{
+			Algorithm:  algorithm,
+			Challenge:  challenge,
+			Salt:       salt,
+			Signature:  signature,
+			Answer:     answer,
+			TargetPath: "/api/v0/chat/completion",
 		}
 		powJson, _ := json.Marshal(powPayload)
 		powB64 := base64.StdEncoding.EncodeToString(powJson)
@@ -106,13 +119,17 @@ func SendMessage(token string, prompt string, listener StreamListener) {
 		}
 		bodyBytes, _ := json.Marshal(bodyMap)
 		
-		listener.OnStatus("等待 AI 回复...")
+		listener.OnStatus("发送对话请求...")
 		req, _ := http.NewRequest("POST", "https://chat.deepseek.com/api/v0/chat/completion", strings.NewReader(string(bodyBytes)))
-		req.Header.Set("Authorization", "Bearer "+token)
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-DS-PoW-Response", powB64)
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-		req.Header[http.HeaderOrderKey] = []string{"authorization", "content-type", "x-ds-pow-response", "user-agent"}
+		
+		// ★ 核心修复：强制全小写 Header，防止 WAF 拦截
+		req.Header = http.Header{
+			"authorization":     []string{"Bearer " + token},
+			"content-type":      []string{"application/json"},
+			"x-ds-pow-response": []string{powB64},
+			"user-agent":        []string{"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+			http.HeaderOrderKey: []string{"authorization", "content-type", "x-ds-pow-response", "user-agent"},
+		}
 
 		resp, err := client.Do(req)
 		if err != nil {
