@@ -2,8 +2,8 @@ package core
 
 import (
 	"bufio"
-	"crypto/sha256"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -92,8 +92,13 @@ func SendMessage(token string, prompt string, listener StreamListener) {
 		powJson, _ := json.Marshal(powPayload)
 		powB64 := base64.StdEncoding.EncodeToString(powJson)
 
+		// 生成 UUID (32位，无横杠)
+		uuidBytes := make([]byte, 16)
+		rand.Read(uuidBytes)
+		chatSessionId := fmt.Sprintf("%x", uuidBytes)
+
 		bodyMap := map[string]interface{}{
-			"chat_session_id": "",
+			"chat_session_id": chatSessionId,
 			"prompt":          prompt,
 			"ref_file_ids":    []string{},
 		}
