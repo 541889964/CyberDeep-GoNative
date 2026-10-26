@@ -1,5 +1,7 @@
 name: Build CyberDeep
 on: [push]
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,7 +22,6 @@ jobs:
           cd go_core
           go get github.com/bogdanfinn/tls-client
           go get golang.org/x/mobile/cmd/gobind
-          # ★ 核心修复：在输出 AAR 之前，确保目标目录存在
           mkdir -p ../app/libs
           gomobile bind -target=android/arm64,android/arm -androidapi 27 -o ../app/libs/core.aar .
           cd ..
@@ -34,8 +35,9 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           ./gradlew assembleDebug --stacktrace
           
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: CyberDeep-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          files: app/build/outputs/apk/debug/app-debug.apk
+          tag_name: v1.0.${{ github.run_number }}
+          name: CyberDeep v1.0.${{ github.run_number }}
