@@ -9,7 +9,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.27.3' # 直接使用最新版本，避免自动切换
+          go-version: '1.27.3'
           
       - name: Build AAR
         run: |
@@ -19,8 +19,9 @@ jobs:
           gomobile init
           cd go_core
           go get github.com/bogdanfinn/tls-client
-          # ★ 核心修复：强制添加 gomobile 所需的工具依赖
           go get golang.org/x/mobile/cmd/gobind
+          # ★ 核心修复：在输出 AAR 之前，确保目标目录存在
+          mkdir -p ../app/libs
           gomobile bind -target=android/arm64,android/arm -androidapi 27 -o ../app/libs/core.aar .
           cd ..
           
