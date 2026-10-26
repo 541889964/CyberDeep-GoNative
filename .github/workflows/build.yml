@@ -1,0 +1,38 @@
+name: Build CyberDeep
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.1'
+          
+      - name: Build AAR
+        run: |
+          go env -w GOPROXY=https://goproxy.cn,direct
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          export PATH=$PATH:$(go env GOPATH)/bin
+          gomobile init
+          cd go_core
+          go get github.com/bogdanfinn/tls-client
+          gomobile bind -target=android/arm64,android/arm -androidapi 27 -o ../app/libs/core.aar .
+          cd ..
+          
+      - uses: actions/setup-java@v4
+        with: { java-version: '17', distribution: 'temurin' }
+        
+      - name: Build APK
+        run: |
+          gradle wrapper --gradle-version 8.5
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          ./gradlew assembleDebug --stacktrace
+          
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CyberDeep-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
