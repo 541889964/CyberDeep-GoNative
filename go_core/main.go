@@ -3,6 +3,7 @@ package core
 import (
 	"bufio"
 	"crypto/sha256"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
