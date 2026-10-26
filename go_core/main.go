@@ -133,8 +133,18 @@ func SendMessage(token string, prompt string, listener StreamListener) {
 				if err := json.Unmarshal([]byte(dataStr), &chunk); err == nil {
 					if v, ok := chunk["v"].(string); ok {
 						listener.OnChunk(v)
+					} else if choices, ok := chunk["choices"].([]interface{}); ok && len(choices) > 0 {
+						if delta, ok := choices[0].(map[string]interface{})["delta"].(map[string]interface{}); ok {
+							if content, ok := delta["content"].(string); ok {
+								listener.OnChunk(content)
+							}
+						}
+					} else {
+						listener.OnChunk("[原始JSON: " + dataStr + "]")
 					}
 				}
+			} else if line != "" {
+				listener.OnChunk("[原始文本: " + line + "]")
 			}
 		}
 		listener.OnFinish()
